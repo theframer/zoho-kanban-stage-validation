@@ -1,0 +1,84 @@
+// Zoho Kanban Stage Validation
+// Author: Amal Dev Anilkumar
+// Description: Validates that stage changes in Deals follow allowed Kanban order.
+
+map validation_rule.LeadStatustValidation1(String crmAPIRequest)
+{
+    // Convert incoming API payload to map
+    entityMap = crmAPIRequest.toMap().get("record");
+
+    // Extract Deal ID
+    id = ifnull(entityMap.get('id'),"");
+    response = Map();
+
+    if(id != "")
+    {
+        // Fetch existing deal details from CRM
+        getdetails = zoho.crm.getRecordById("Deals", id);
+
+        currentStage = getdetails.get("Stage");
+        newStage = entityMap.get("Stage");
+
+        info "Current Stage: " + currentStage;
+        info "New Stage: " + newStage;
+
+        // Define allowed stage order
+        stageOrder = list();
+        stageOrder.add("Qualified Deal");
+        stageOrder.add("Quotation Created");
+        stageOrder.add("Negotiation");
+        stageOrder.add("Quotation Accepted");
+        stageOrder.add("Sales Order Created");
+        stageOrder.add("Deal Won");
+        stageOrder.add("Deal Lost");
+
+        currentIndex = stageOrder.indexOf(currentStage);
+        newIndex = stageOrder.indexOf(newStage);
+
+        // Allow special backward move from Negotiation to Quotation Created
+        allowBackwardFromNegotiation = list();
+        allowBackwardFromNegotiation.add("Quotation Created");
+
+        if(currentIndex > -1 && newIndex > -1)
+        {
+            if(newStage == currentStage)
+            {
+                // No change
+                response.put("status","success");
+                response.put("message","No change in stage.");
+            }
+            else if(currentIndex < newIndex)
+            {
+                // Moving forward
+                response.put("status","success");
+                response.put("message","Valid forward movement.");
+            }
+            else
+            {
+                // Moving backward
+                if(currentStage == "Negotiation" && allowBackwardFromNegotiation.contains(newStage))
+                {
+                    response.put("status","success");
+                    response.put("message","Backward movement allowed from Negotiation to Quotation Created.");
+                }
+                else
+                {
+                    response.put("status","error");
+                    response.put("message","Backward movement is not allowed from " + currentStage + " to " + newStage + ".");
+                }
+            }
+        }
+        else
+        {
+            response.put("status","error");
+            response.put("message","Invalid stage(s) detected.");
+        }
+    }
+    else
+    {
+        response.put("status","error");
+        response.put("message","Record ID is missing.");
+    }
+
+    return response;
+}
